@@ -1,48 +1,56 @@
 const hre = require("hardhat");
-
-function isB50(addr) {
-  return addr.toLowerCase().startsWith("0xb50");
-}
+const { ethers } = hre;
 
 async function main() {
-  const factory = await hre.ethers.getContractAt(
-    "TokenFactory",
-    process.env.FACTORY
-  );
+    const factoryAddress = process.env.FACTORY;
 
-  const supply = hre.ethers.parseUnits("210000000", 18);
-
-  const bytecode = hre.ethers.solidityPackedKeccak256(
-    ["bytes", "bytes"],
-    [
-      hre.artifacts.readArtifactSync("BitsocialToken").bytecode,
-      hre.ethers.AbiCoder.defaultAbiCoder().encode(
-        ["uint256"],
-        [supply]
-      )
-    ]
-  );
-
-  console.log("Searching for salt...");
-
-  for (let i = 0; i < 1_000_000; i++) {
-    const salt = hre.ethers.zeroPadValue(hre.ethers.toBeHex(i), 32);
-
-    const predicted = await factory.computeAddress(salt, bytecode);
-
-    if (isB50(predicted)) {
-      console.log("FOUND!");
-      console.log("Salt:", salt);
-      console.log("Address:", predicted);
-      return;
+    if (!factoryAddress) {
+        throw new Error("FACTORY missing from .env");
     }
 
-    if (i % 10000 === 0) {
-      console.log("Checked:", i);
-    }
-  }
+    console.log("Factory:", factoryAddress);
+    console.log("Searching for CREATE2 address starting with 0xB50...\n");
 
-  console.log("No match found");
+    const artifact = await hre.artifacts.readArtifact("BitsocialToken");
+
+    // No constructor args anymore
+    const bytecode = artifact.bytecode;
+
+    const bytecodeHash = ethers.keccak256(bytecode);
+
+    let checked = 0n;
+
+    while (true) {
+        const salt = ethers.zeroPadValue(
+            ethers.toBeHex(checked),
+            32
+        );
+
+        const predictedAddress = ethers.getCreate2Address(
+            factoryAddress,
+            salt,
+            bytecodeHash
+        );
+
+        if (predictedAddress.startsWith("0xB50")) {
+            console.log("\n=================================");
+            console.log("FOUND MATCH!");
+            console.log("Address:", predictedAddress);
+            console.log("Salt   :", salt);
+            console.log("Checked:", checked.toString());
+            console.log("=================================");
+            // return;
+        }
+
+        checked++;
+
+        if (checked % 100000n === 0n) {
+            process.stdout.write(`\rChecked ${checked.toString()} salts...`);
+        }
+    }
 }
 
-main();
+main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+});

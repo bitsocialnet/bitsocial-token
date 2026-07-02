@@ -2,11 +2,16 @@ require("@nomicfoundation/hardhat-toolbox");
 require("dotenv").config();
 
 module.exports = {
-  solidity: "0.8.27",
+  solidity: {
+    version: "0.8.27",
+    settings: {
+      evmVersion: "cancun",
+    },
+  },
   networks: {
-    sepolia: {
-      url: process.env.RPC_URL,
-      accounts: [process.env.PRIVATE_KEY],
+    mainnet: {
+      url: process.env.MAINNET_RPC_URL,
+      // accounts: [process.env.PRIVATE_KEY],
     },
   },
 };
